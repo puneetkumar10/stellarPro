@@ -31,10 +31,10 @@ router.post("/transaction", (req, res) => {
   var q = req.body;
   var data = {
     senderPriKey : q.senderPriKey,
-    receiverPubKey : q.receiverPubKey,
+    receiverPriKey : q.receiverPriKey,
     amount : q.amount
   }
-  stellarService.CreateTransaction(data, (err, result) => {
+  stellarService.TransferAsset(data, (err, result) => {
     if (err)
       responseService.response(req, err, null, res);
     else

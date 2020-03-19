@@ -50,7 +50,9 @@ exports.CreateTransaction = (data, next) => {
     // var server = new StellarSdk.Server('https://horizon-testnet.stellar.org');
     var sourceKeys = StellarSdk.Keypair
         .fromSecret(data.senderPriKey);
-    var destinationId = data.receiverPubKey;
+    var destKeys = StellarSdk.Keypair
+        .fromSecret(data.receiverPriKey);
+    var destinationId = destKeys.publicKey();
     // Transaction will hold a built transaction we can resubmit if the result is unknown.
     var transaction;
 
@@ -110,10 +112,10 @@ exports.issueToken = async (data, next) => {
         .fromSecret(data.receiverPriKey);
 
     // Create an object to represent the new asset
-    var astroDollar = new StellarSdk.Asset('AstroDollar', issuingKeys.publicKey());
+    var astroDollar = new StellarSdk.Asset('PuneetToken', issuingKeys.publicKey());
 
     // code for check of trustability
-    var astroDollarCode = 'AstroDollar';
+    var astroDollarCode = 'PuneetToken';
     var astroDollarIssuer = issuingKeys.publicKey();
     var accountId = receivingKeys.publicKey();
     server.loadAccount(accountId).then(function (account) {
@@ -167,4 +169,81 @@ exports.issueToken = async (data, next) => {
             console.error('Error!', error);
             next(error, null);
         });
+}
+
+exports.TransferAsset = async (data, next) => {
+    StellarSdk.Network.useTestNetwork();
+    // Prepare keypairs for all participating accounts - source account and destination account.
+    let source = StellarSdk.Keypair.fromSecret(data.senderPriKey)
+    let dest = StellarSdk.Keypair.fromSecret(data.receiverPriKey)
+
+    // Transactions require a valid sequence number that is specific to this account.
+    // We can fetch the current sequence number for the source account from Horizon.
+    const account = await server.loadAccount(source.publicKey());
+
+    // Right now, there's one function that fetches the base fee.
+    // In the future, we'll have functions that are smarter about suggesting fees,
+    // e.g.: `fetchCheapFee`, `fetchAverageFee`, `fetchPriorityFee`, etc.
+    const fee = await server.fetchBaseFee();
+
+    // First, the receiving account must trust the asset
+    await server.loadAccount(dest.publicKey())
+        .then(function (receiver) {
+            var transaction = new StellarSdk.TransactionBuilder(receiver, opts = { fee: 100 })
+                // The `changeTrust` operation creates (or alters) a trustline
+                // The `limit` parameter below is optional
+                .addOperation(StellarSdk.Operation.changeTrust({
+                    asset: new StellarSdk.Asset('PuneetToken', 'GAQPXWS4JKOXGDO5J2VDZCKNPQ2AAMMTDDGVJWWI2Q3OE2CE2NZLTHAM'),
+                    limit: '1000'
+                }))
+                // setTimeout is required for a transaction
+                .setTimeout(100)
+                .build();
+            transaction.sign(dest);
+            return server.submitTransaction(transaction);
+        })
+
+    const transaction = new StellarSdk.TransactionBuilder(account, {
+        fee,
+        // Uncomment the following line to build transactions for the live network. Be
+        // sure to also change the horizon hostname.
+        // networkPassphrase: StellarSdk.Networks.PUBLIC,
+        networkPassphrase: StellarSdk.Networks.TESTNET
+    })
+        // Add a payment operation to the transaction
+        .addOperation(StellarSdk.Operation.payment({
+            destination: dest.publicKey(),
+            // The term native asset refers to lumens
+            asset: new StellarSdk.Asset('PuneetToken', 'GAQPXWS4JKOXGDO5J2VDZCKNPQ2AAMMTDDGVJWWI2Q3OE2CE2NZLTHAM'),
+            // Specify 350.1234567 lumens. Lumens are divisible to seven digits past
+            // the decimal. They are represented in JS Stellar SDK in string format
+            // to avoid errors from the use of the JavaScript Number data structure.
+            amount: '20',
+        }))
+        // Make this transaction valid for the next 30 seconds only
+        .setTimeout(30)
+        // Uncomment to add a memo (https://www.stellar.org/developers/learn/concepts/transactions.html)
+        // .addMemo(StellarSdk.Memo.text('Hello world!'))
+        .build();
+
+    // Sign this transaction with the secret key
+    // NOTE: signing is transaction is network specific. Test network transactions
+    // won't work in the public network. To switch networks, use the Network object
+    // as explained above (look for StellarSdk.Network).
+    transaction.sign(source);
+
+    // Let's see the XDR (encoded in base64) of the transaction we just built
+    console.log(transaction.toEnvelope().toXDR('base64'));
+
+    // Submit the transaction to the Horizon server. The Horizon server will then
+    // submit the transaction into the network for us.
+    try {
+        const transactionResult = await server.submitTransaction(transaction);
+        console.log(JSON.stringify(transactionResult, null, 2));
+        console.log('\nSuccess! View the transaction at: ');
+        console.log(transactionResult._links.transaction.href);
+    } catch (e) {
+        console.log('An error has occured:');
+        console.log(e);
+    }
 }

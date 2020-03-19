@@ -24,6 +24,7 @@ app.use('/stellar', indexRouter);
 
 //mongo models
 require('./model/walletCreation');
+require('./model/transactionModel')
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
