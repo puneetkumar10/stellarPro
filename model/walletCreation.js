@@ -4,7 +4,7 @@ var Schema = mongoose.Schema,
 
 var walletCreation = new Schema({
     id:ObjectId,
-    req:String,
+    req:Object,
     walletCreds:Object,    
     createDate:{type:Date ,
     default:Date.now}

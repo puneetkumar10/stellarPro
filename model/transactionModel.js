@@ -4,7 +4,7 @@ var Schema = mongoose.Schema,
 
 var transactionModel = new Schema({
     id:ObjectId,
-    req:String,
+    req:Object,
     transactionDetails:Object,    
     transactionDate:{type:Date ,
     default:Date.now}
